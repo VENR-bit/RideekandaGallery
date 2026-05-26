@@ -6,10 +6,7 @@
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
 // ──────────────────────────────────────────────────────────────────────
-// Google Places API configuration
-// Replace with your own key from https://console.cloud.google.com
-// Enable "Places API" and restrict the key to your domain.
-const GOOGLE_API_KEY = '';
+// Google Places configuration (key is in index.html's Maps JS script tag)
 const PLACE_ID = 'ChIJLwCJ_Yz04joRwhfEgMDjxkw';
 const MAX_PHOTO_WIDTH = 1200;
 
@@ -76,10 +73,12 @@ const FALLBACK_ITEMS = [
 ];
 
 // ──────────────────────────────────────────────────────────────────────
-// Google Places API — fetch real photos uploaded by visitors
-function buildPhotoUrl(photoRef, maxWidth) {
-  return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${maxWidth}&photo_reference=${photoRef}&key=${GOOGLE_API_KEY}`;
-}
+// Google Places — fetch real photos via Maps JavaScript API (CORS-safe)
+// The Maps JS API is loaded in index.html; __onMapsReady resolves when ready.
+const __mapsReady = new Promise((resolve) => {
+  if (window.google?.maps?.places) { resolve(); return; }
+  window.__onMapsReady = resolve;
+});
 
 function useGooglePlacePhotos() {
   const [photos, setPhotos] = useState([]);
@@ -87,43 +86,43 @@ function useGooglePlacePhotos() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (!GOOGLE_API_KEY) return;
-
     let cancelled = false;
     setLoading(true);
     setError(null);
 
-    const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${PLACE_ID}&fields=photos,name&key=${GOOGLE_API_KEY}`;
-
-    fetch(url)
-      .then((res) => {
-        if (!res.ok) throw new Error(`Places API: ${res.status}`);
-        return res.json();
-      })
-      .then((data) => {
+    __mapsReady
+      .then(async () => {
         if (cancelled) return;
-        if (data.status !== 'OK') {
-          throw new Error(`Places API status: ${data.status}`);
+        await google.maps.importLibrary('places');
+        const place = new google.maps.places.Place({ id: PLACE_ID });
+        await place.fetchFields({ fields: ['photos', 'displayName'] });
+        if (cancelled) return;
+        const placePhotos = place.photos || [];
+        if (placePhotos.length === 0) {
+          setError('No photos found for this place');
+          setLoading(false);
+          return;
         }
-        const photoRefs = data.result?.photos || [];
-        const mapped = photoRefs.map((p, i) => ({
-          caption: p.html_attributions?.[0]
-            ? p.html_attributions[0].replace(/<[^>]*>/g, '')
-            : `Visitor photo ${i + 1}`,
-          type: 'photo',
-          src: buildPhotoUrl(p.photo_reference, MAX_PHOTO_WIDTH),
-          thumbSrc: buildPhotoUrl(p.photo_reference, 400),
-          width: p.width,
-          height: p.height,
-          attribution: p.html_attributions?.[0] || '',
-        }));
+        const mapped = placePhotos.map((photo, i) => {
+          const attribs = photo.authorAttributions || [];
+          const authorName = attribs[0]?.displayName || `Visitor photo ${i + 1}`;
+          return {
+            caption: authorName,
+            type: 'photo',
+            src: photo.getURI({ maxWidth: MAX_PHOTO_WIDTH }),
+            thumbSrc: photo.getURI({ maxWidth: 400 }),
+            width: photo.widthPx,
+            height: photo.heightPx,
+            attribution: authorName,
+          };
+        });
         setPhotos(mapped);
         setLoading(false);
       })
       .catch((err) => {
         if (cancelled) return;
-        console.warn('Google Places photo fetch failed:', err.message);
-        setError(err.message);
+        console.warn('Google Places photo fetch failed:', err);
+        setError(err.message || 'Places API failed');
         setLoading(false);
       });
 
@@ -362,7 +361,6 @@ function App() {
   const next  = useCallback(() => setIdx((i) => (i === null ? null : (i + 1) % items.length)), [items.length]);
 
   const photoCount = items.filter(i => i.type === 'photo').length;
-  const hasApiKey = !!GOOGLE_API_KEY;
 
   return (
     <>
@@ -392,12 +390,6 @@ function App() {
         {error && (
           <div className="api-status error">
             <span>Could not load Google Maps photos — showing placeholders</span>
-          </div>
-        )}
-
-        {!hasApiKey && (
-          <div className="api-status info">
-            <span>Add a Google Places API key in gallery.jsx to show real visitor photos</span>
           </div>
         )}
 
