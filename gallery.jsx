@@ -1,9 +1,17 @@
 // gallery.jsx — Rideekanda Forest Monastery gallery
 // React app: hero + grid + lightbox + tweaks
-// Placeholder tiles use deterministic earth-tone gradients (swap with real
-// Google Maps photo/video URLs by replacing `src`/`type` fields in ITEMS).
+// Fetches real photos from Google Places API when an API key is configured,
+// falls back to deterministic earth-tone gradient placeholders otherwise.
 
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+// ──────────────────────────────────────────────────────────────────────
+// Google Places API configuration
+// Replace with your own key from https://console.cloud.google.com
+// Enable "Places API" and restrict the key to your domain.
+const GOOGLE_API_KEY = '';
+const PLACE_ID = 'ChIJLwCJ_Yz04joRwhfEgMDjxkw';
+const MAX_PHOTO_WIDTH = 1200;
 
 // ──────────────────────────────────────────────────────────────────────
 // Tweakable defaults — host rewrites this block on disk when user adjusts.
@@ -51,34 +59,79 @@ const PALETTES = {
 };
 
 // ──────────────────────────────────────────────────────────────────────
-// Gallery items. Real Google Maps photo/video URLs go here later — for now
-// each item gets a deterministic gradient placeholder generated below.
-const ITEMS = [
+// Fallback items — shown when no API key is set or while photos load.
+const FALLBACK_ITEMS = [
   { caption: 'Dawn light through the canopy',              type: 'photo' },
   { caption: 'Forest path to the meditation cave',         type: 'photo' },
-  { caption: 'Walking meditation track, before the bell',  type: 'video' },
+  { caption: 'Walking meditation track, before the bell',  type: 'photo' },
   { caption: 'The Bodhi tree at dusk',                     type: 'photo' },
   { caption: 'Almsround through the village at first light', type: 'photo' },
-  { caption: 'Rain on the stupa roof',                     type: 'video' },
+  { caption: 'Rain on the stupa roof',                     type: 'photo' },
   { caption: 'Cave kuti, monsoon morning',                 type: 'photo' },
   { caption: 'Lotus pond by the second pavilion',          type: 'photo' },
-  { caption: 'Evening chanting in the dhamma hall',        type: 'video' },
+  { caption: 'Evening chanting in the dhamma hall',        type: 'photo' },
   { caption: 'Mist between the rubber trees',              type: 'photo' },
   { caption: 'Stone steps to the upper shrine',            type: 'photo' },
-  { caption: 'A novice sweeping the courtyard',            type: 'photo' },
   { caption: 'View from the meditation hall window',       type: 'photo' },
-  { caption: 'The water cistern at noon',                  type: 'photo' },
-  { caption: 'Forest after the rain',                      type: 'video' },
-  { caption: 'Robes drying in the afternoon sun',          type: 'photo' },
-  { caption: 'The old footbridge',                         type: 'photo' },
-  { caption: 'Quiet at the cave entrance',                 type: 'photo' },
-  { caption: 'Birdsong before the morning bell',           type: 'video' },
-  { caption: 'Offerings at the foot of the Buddha',        type: 'photo' },
-  { caption: 'The library terrace',                        type: 'photo' },
-  { caption: 'Last light on the stupa',                    type: 'photo' },
-  { caption: 'Cicadas in the dry season',                  type: 'video' },
-  { caption: 'Footsteps on the path home',                 type: 'photo' }
 ];
+
+// ──────────────────────────────────────────────────────────────────────
+// Google Places API — fetch real photos uploaded by visitors
+function buildPhotoUrl(photoRef, maxWidth) {
+  return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${maxWidth}&photo_reference=${photoRef}&key=${GOOGLE_API_KEY}`;
+}
+
+function useGooglePlacePhotos() {
+  const [photos, setPhotos] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!GOOGLE_API_KEY) return;
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${PLACE_ID}&fields=photos,name&key=${GOOGLE_API_KEY}`;
+
+    fetch(url)
+      .then((res) => {
+        if (!res.ok) throw new Error(`Places API: ${res.status}`);
+        return res.json();
+      })
+      .then((data) => {
+        if (cancelled) return;
+        if (data.status !== 'OK') {
+          throw new Error(`Places API status: ${data.status}`);
+        }
+        const photoRefs = data.result?.photos || [];
+        const mapped = photoRefs.map((p, i) => ({
+          caption: p.html_attributions?.[0]
+            ? p.html_attributions[0].replace(/<[^>]*>/g, '')
+            : `Visitor photo ${i + 1}`,
+          type: 'photo',
+          src: buildPhotoUrl(p.photo_reference, MAX_PHOTO_WIDTH),
+          thumbSrc: buildPhotoUrl(p.photo_reference, 400),
+          width: p.width,
+          height: p.height,
+          attribution: p.html_attributions?.[0] || '',
+        }));
+        setPhotos(mapped);
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn('Google Places photo fetch failed:', err.message);
+        setError(err.message);
+        setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, []);
+
+  return { photos, loading, error };
+}
 
 // Aspect-ratio rhythm for masonry tiles — mix of tall / medium / square / wide
 // gives the page a hand-arranged feel rather than a uniform grid.
@@ -134,13 +187,13 @@ function PlayGlyph() {
 function Tile({ item, index, onOpen }) {
   const ref = useRef(null);
   const [visible, setVisible] = useState(false);
+  const [imgLoaded, setImgLoaded] = useState(false);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const io = new IntersectionObserver((entries) => {
       entries.forEach((e) => {
         if (e.isIntersecting) {
-          // small stagger by column to feel like things are settling
           const delay = (index % 6) * 70;
           setTimeout(() => setVisible(true), delay);
           io.unobserve(el);
@@ -151,6 +204,7 @@ function Tile({ item, index, onOpen }) {
     return () => io.disconnect();
   }, [index]);
 
+  const hasSrc = !!item.thumbSrc || !!item.src;
   const bg = item.gradient;
   const ar = ASPECTS[index % ASPECTS.length];
   return (
@@ -165,6 +219,16 @@ function Tile({ item, index, onOpen }) {
       onKeyDown={(e) => { if (e.key === 'Enter') onOpen(index); }}
     >
       <div className="ph" />
+      {hasSrc && (
+        <img
+          className={`tile-img ${imgLoaded ? 'loaded' : ''}`}
+          src={item.thumbSrc || item.src}
+          alt={item.caption}
+          loading="lazy"
+          onLoad={() => setImgLoaded(true)}
+          draggable="false"
+        />
+      )}
       <div className="grain" />
       <div className="vignette" />
       {item.type === 'video' && (
@@ -219,13 +283,21 @@ function Lightbox({ items, index, onClose, onPrev, onNext }) {
           <button className="lb-nav next" onClick={(e) => { e.stopPropagation(); onNext(); }} aria-label="Next">›</button>
           <div className="lb-stage" onClick={(e) => e.stopPropagation()}>
             <div
-              className={`lb-frame ${swapping ? 'swap' : ''}`}
+              className={`lb-frame ${swapping ? 'swap' : ''} ${item.src ? 'has-img' : ''}`}
               style={{
                 ['--tile-bg']: item.gradient,
-                aspectRatio: (typeof ASPECTS !== 'undefined' ? ASPECTS[index % ASPECTS.length] : '4 / 5')
+                aspectRatio: item.src ? undefined : (typeof ASPECTS !== 'undefined' ? ASPECTS[index % ASPECTS.length] : '4 / 5')
               }}
             >
               <div className="ph" />
+              {item.src && (
+                <img
+                  className="lb-img"
+                  src={item.src}
+                  alt={item.caption}
+                  draggable="false"
+                />
+              )}
               <div className="grain" />
               <div className="vignette" />
               {item.type === 'video' && (
@@ -235,7 +307,11 @@ function Lightbox({ items, index, onClose, onPrev, onNext }) {
             <div className="lb-meta">
               <div className="num">{String(index + 1).padStart(2, '0')} / {String(items.length).padStart(2, '0')}</div>
               <div className="cap">{item.caption}</div>
-              <div className="num right">{item.type === 'video' ? 'Video' : 'Photograph'}</div>
+              <div className="num right">
+                {item.attribution
+                  ? <span dangerouslySetInnerHTML={{ __html: item.attribution }} />
+                  : 'Photograph'}
+              </div>
             </div>
           </div>
         </>
@@ -260,11 +336,11 @@ function applyPalette(p) {
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [idx, setIdx] = useState(null);
+  const { photos, loading, error } = useGooglePlacePhotos();
 
   const palette = PALETTES[t.palette] || PALETTES.stillness;
   useEffect(() => { applyPalette(palette); }, [palette]);
 
-  // expose density + columns + captions on body for CSS to use
   useEffect(() => {
     const gap = t.density === 'spacious' ? 40 : t.density === 'dense' ? 12 : 24;
     document.documentElement.style.setProperty('--gap', `${gap}px`);
@@ -273,11 +349,12 @@ function App() {
     document.body.dataset.grain = t.grain ? '1' : '0';
   }, [t.density, t.columns, t.captions, t.grain]);
 
-  // build item list with gradients tied to current palette
-  const items = useMemo(() => ITEMS.map((it, i) => ({
+  const sourceItems = photos.length > 0 ? photos : FALLBACK_ITEMS;
+
+  const items = useMemo(() => sourceItems.map((it, i) => ({
     ...it,
     gradient: gradient(i, palette.tones)
-  })), [palette]);
+  })), [palette, sourceItems]);
 
   const open  = useCallback((i) => setIdx(i), []);
   const close = useCallback(() => setIdx(null), []);
@@ -285,7 +362,7 @@ function App() {
   const next  = useCallback(() => setIdx((i) => (i === null ? null : (i + 1) % items.length)), [items.length]);
 
   const photoCount = items.filter(i => i.type === 'photo').length;
-  const videoCount = items.filter(i => i.type === 'video').length;
+  const hasApiKey = !!GOOGLE_API_KEY;
 
   return (
     <>
@@ -299,24 +376,44 @@ function App() {
         <section className="intro" data-screen-label="03 Intro">
           <p className="lead">A gallery</p>
           <p style={{margin: 0}}>
-            Photographs and short videos left behind by visitors to the forest
+            Photographs shared by visitors to the forest
             monastery — quiet glimpses of a place that asks for very little, and gives
             back what arrives in the silence.
           </p>
         </section>
+
+        {loading && (
+          <div className="api-status loading">
+            <div className="api-spinner" />
+            <span>Loading photos from Google Maps…</span>
+          </div>
+        )}
+
+        {error && (
+          <div className="api-status error">
+            <span>Could not load Google Maps photos — showing placeholders</span>
+          </div>
+        )}
+
+        {!hasApiKey && (
+          <div className="api-status info">
+            <span>Add a Google Places API key in gallery.jsx to show real visitor photos</span>
+          </div>
+        )}
 
         <section className="gallery-section" data-screen-label="04 Gallery">
           <div className="section-label">
             <span>Gallery</span>
             <span className="line" />
             <span className="count">
-              {String(photoCount).padStart(2,'0')} photographs · {String(videoCount).padStart(2,'0')} videos
+              {String(photoCount).padStart(2,'0')} photographs
+              {photos.length > 0 && ' · via Google Maps'}
             </span>
           </div>
 
           <div className="grid">
             {items.map((it, i) => (
-              <Tile key={i} item={{...it, type: it.type}} index={i} onOpen={open} />
+              <Tile key={i} item={it} index={i} onOpen={open} />
             ))}
           </div>
         </section>
@@ -324,7 +421,7 @@ function App() {
         <footer className="footer" data-screen-label="05 Footer">
           <div className="mono"><Lotus /></div>
           <p>Rideekanda Forest Monastery</p>
-          <p className="note">photographs &amp; recordings shared by visitors via Google Maps</p>
+          <p className="note">photographs shared by visitors via Google Maps</p>
         </footer>
       </main>
 

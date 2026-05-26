@@ -219,6 +219,24 @@ a { color: inherit; text-decoration: none; }
   pointer-events: none;
   background: radial-gradient(ellipse at 50% 60%, transparent 55%, rgba(0,0,0,.18) 100%);
 }
+/* Real photo image inside tile */
+.tile-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity .6s ease, transform 1.4s cubic-bezier(.2,.7,.2,1), filter .6s ease;
+}
+.tile-img.loaded {
+  opacity: 1;
+}
+.tile:hover .tile-img {
+  transform: scale(1.04);
+  filter: brightness(1.04) saturate(1.05);
+}
 .tile:hover .ph {
   transform: scale(1.04);
   filter: brightness(1.04) saturate(1.05);
@@ -278,6 +296,45 @@ a { color: inherit; text-decoration: none; }
   transition: opacity .35s ease, transform .35s ease;
 }
 .tile:hover .cap, body[data-captions="1"] .tile .cap { opacity: 1; transform: translateY(0); }
+
+/* ── API status messages ── */
+.api-status {
+  max-width: 560px;
+  margin: 0 auto 32px;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 14px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.api-status.loading {
+  background: rgba(42, 36, 24, .06);
+  color: var(--muted);
+}
+.api-status.error {
+  background: rgba(180, 80, 40, .08);
+  color: rgba(140, 50, 20, .75);
+}
+.api-status.info {
+  background: rgba(42, 36, 24, .04);
+  color: var(--muted);
+  font-style: italic;
+}
+.api-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--line);
+  border-top-color: var(--muted);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 
 /* ── Footer ── */
 .footer {
@@ -367,6 +424,23 @@ a { color: inherit; text-decoration: none; }
   position: absolute; inset: 0;
   background: radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(0,0,0,.35) 100%);
 }
+/* Full-res image in lightbox */
+.lb-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  z-index: 1;
+}
+.lb-frame.has-img {
+  aspect-ratio: unset !important;
+  background: #0a0806;
+}
+.lb-frame.has-img .ph {
+  opacity: .3;
+}
+
 .lb-frame .play.big {
   position: absolute; left: 50%; top: 50%;
   transform: translate(-50%, -50%);
