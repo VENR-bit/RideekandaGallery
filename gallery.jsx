@@ -7,7 +7,7 @@ const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
 // ──────────────────────────────────────────────────────────────────────
 // Google Places configuration (key is in index.html's Maps JS script tag)
-const PLACE_ID = 'ChIJLwCJ_Yz04joRwhfEgMDjxkw';
+const PLACE_ID = 'ChIJ5eRfpfpP4zoR-ExQbZI87sk';
 const MAX_PHOTO_WIDTH = 1200;
 
 // ──────────────────────────────────────────────────────────────────────
@@ -74,8 +74,9 @@ const FALLBACK_ITEMS = [
 
 // ──────────────────────────────────────────────────────────────────────
 // Google Places — fetch real photos via Maps JavaScript API (CORS-safe)
-// The Maps JS API is loaded in index.html; __onMapsReady resolves when ready.
-const __mapsReady = new Promise((resolve) => {
+// The Maps JS API is loaded in index.html; __mapsReadyPromise is defined there
+// before the async Maps script tag, so the callback is always available.
+const __mapsReady = window.__mapsReadyPromise || new Promise((resolve) => {
   if (window.google?.maps?.places) { resolve(); return; }
   window.__onMapsReady = resolve;
 });
