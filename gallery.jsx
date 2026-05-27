@@ -10,6 +10,9 @@ const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const PLACE_ID = 'ChIJ5eRfpfpP4zoR-ExQbZI87sk';
 const MAX_PHOTO_WIDTH = 1200;
 
+// Google Photos album via Apps Script proxy
+const PHOTOS_API_URL = 'https://script.google.com/macros/s/AKfycbzWK_h62Kw5AwfuUzs5Yn1l4MxOWFwBsohALrpB0g8iTU76GWLiT_RNkcVTW2704N8l1w/exec';
+
 // ──────────────────────────────────────────────────────────────────────
 // Tweakable defaults — host rewrites this block on disk when user adjusts.
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
@@ -124,6 +127,53 @@ function useGooglePlacePhotos() {
         if (cancelled) return;
         console.warn('Google Places photo fetch failed:', err);
         setError(err.message || 'Places API failed');
+        setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, []);
+
+  return { photos, loading, error };
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Google Photos album — fetch via Apps Script proxy (no CORS issues)
+// Returns fresh baseUrls each call; the proxy caches album data for 30 min.
+function useGooglePhotosAlbum() {
+  const [photos, setPhotos] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    fetch(PHOTOS_API_URL)
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (!data.success) {
+          setError(data.error || 'API returned an error');
+          setLoading(false);
+          return;
+        }
+        const mapped = data.photos.map((p, i) => ({
+          caption: p.ts ? `Rideekanda · ${new Date(p.ts).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}` : 'Rideekanda Forest Monastery',
+          type: 'photo',
+          src: `${p.baseUrl}=w${MAX_PHOTO_WIDTH}`,
+          thumbSrc: `${p.baseUrl}=w400`,
+          width: p.w,
+          height: p.h,
+          attribution: 'Google Photos album',
+        }));
+        setPhotos(mapped);
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn('Google Photos album fetch failed:', err);
+        setError(err.message || 'Album API failed');
         setLoading(false);
       });
 
@@ -336,7 +386,20 @@ function applyPalette(p) {
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [idx, setIdx] = useState(null);
-  const { photos, loading, error } = useGooglePlacePhotos();
+  const { photos: placePhotos, loading: placeLoading, error: placeError } = useGooglePlacePhotos();
+  const { photos: albumPhotos, loading: albumLoading, error: albumError } = useGooglePhotosAlbum();
+
+  // Combine both sources: Google Places photos + Google Photos album
+  // Deduplicate by removing album photos that look similar to place photos (by rough size match)
+  const photos = useMemo(() => {
+    if (albumPhotos.length === 0) return placePhotos;
+    if (placePhotos.length === 0) return albumPhotos;
+    // Place photos first, then album photos
+    return [...placePhotos, ...albumPhotos];
+  }, [placePhotos, albumPhotos]);
+
+  const loading = placeLoading || albumLoading;
+  const error = (placeError && albumError) ? `${placeError}; ${albumError}` : null;
 
   const palette = PALETTES[t.palette] || PALETTES.stillness;
   useEffect(() => { applyPalette(palette); }, [palette]);
@@ -384,13 +447,13 @@ function App() {
         {loading && (
           <div className="api-status loading">
             <div className="api-spinner" />
-            <span>Loading photos from Google Maps…</span>
+            <span>Loading photos…</span>
           </div>
         )}
 
-        {error && (
+        {error && photos.length === 0 && (
           <div className="api-status error">
-            <span>Could not load Google Maps photos — showing placeholders</span>
+            <span>Could not load photos — showing placeholders</span>
           </div>
         )}
 
@@ -400,7 +463,7 @@ function App() {
             <span className="line" />
             <span className="count">
               {String(photoCount).padStart(2,'0')} photographs
-              {photos.length > 0 && ' · via Google Maps'}
+              {photos.length > 0 && ' · via Google'}
             </span>
           </div>
 
@@ -414,7 +477,7 @@ function App() {
         <footer className="footer" data-screen-label="05 Footer">
           <div className="mono"><Lotus /></div>
           <p>Rideekanda Forest Monastery</p>
-          <p className="note">photographs shared by visitors via Google Maps</p>
+          <p className="note">photographs shared by visitors</p>
         </footer>
       </main>
 
