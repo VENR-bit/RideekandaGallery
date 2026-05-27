@@ -2,7 +2,7 @@
 // Fetches photos from a PUBLIC Google Photos shared-album link.
 // No Photos Library API needed (it was deprecated April 2025).
 
-var SHARED_ALBUM_URL = 'https://photos.app.goo.gl/QdPzwTorF51bHnTw7';
+var SHARED_ALBUM_URL = 'https://photos.app.goo.gl/w7y98bSkPyDKCevg7';
 
 var CACHE_TTL = 1800; // 30 minutes
 

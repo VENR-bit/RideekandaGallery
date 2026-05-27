@@ -434,7 +434,6 @@ a { color: inherit; text-decoration: none; }
   z-index: 1;
 }
 .lb-frame.has-img {
-  aspect-ratio: unset !important;
   background: #0a0806;
 }
 .lb-frame.has-img .ph {

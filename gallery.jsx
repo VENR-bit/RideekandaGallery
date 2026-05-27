@@ -336,7 +336,9 @@ function Lightbox({ items, index, onClose, onPrev, onNext }) {
               className={`lb-frame ${swapping ? 'swap' : ''} ${item.src ? 'has-img' : ''}`}
               style={{
                 ['--tile-bg']: item.gradient,
-                aspectRatio: item.src ? undefined : (typeof ASPECTS !== 'undefined' ? ASPECTS[index % ASPECTS.length] : '4 / 5')
+                aspectRatio: item.src
+                  ? (item.width && item.height ? `${item.width} / ${item.height}` : '4 / 3')
+                  : (typeof ASPECTS !== 'undefined' ? ASPECTS[index % ASPECTS.length] : '4 / 5')
               }}
             >
               <div className="ph" />
