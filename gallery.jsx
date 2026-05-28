@@ -431,6 +431,9 @@ function App() {
   return (
     <>
       <main className="shell">
+        <nav className="back-nav">
+          <a href="https://rideekanda.org/" className="back-link">&larr; Home</a>
+        </nav>
         <section className="hero" data-screen-label="02 Hero">
           <Lotus className="lotus" />
           <p className="place">Rideekanda&nbsp;·&nbsp;Forest Monastery</p>

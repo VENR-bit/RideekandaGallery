@@ -80,6 +80,24 @@ a { color: inherit; text-decoration: none; }
 }
 .topmark img { width: 56px; height: auto; opacity: .9; display: block; }
 
+/* ── Back nav ── */
+.back-nav {
+  padding: 24px 0 0;
+}
+.back-link {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 500;
+  font-size: 15px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-decoration: none;
+  transition: color .2s ease;
+}
+.back-link:hover {
+  color: var(--ink);
+}
+
 /* ── Hero ── */
 .hero {
   display: flex;
