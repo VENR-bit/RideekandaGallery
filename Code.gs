@@ -35,13 +35,13 @@ function doGet(e) {
 
 function getCachedPhotos_() {
   var cache = CacheService.getScriptCache();
-  var cached = cache.get('gallery_photos');
+  var cached = cache.get('gallery_photos_v2');
   if (cached) return JSON.parse(cached);
   var photos = fetchSharedAlbumPhotos_();
   // CacheService max value size is 100KB; chunk if needed
   var jsonStr = JSON.stringify(photos);
   if (jsonStr.length < 100000) {
-    try { cache.put('gallery_photos', jsonStr, CACHE_TTL); } catch(e) {}
+    try { cache.put('gallery_photos_v2', jsonStr, CACHE_TTL); } catch(e) {}
   }
   return photos;
 }
@@ -77,20 +77,21 @@ function parsePhotosFromHtml_(html) {
 
   for (var i = 0; i < dataBlocks.length; i++) {
     var block = dataBlocks[i];
-    // Look for photo URL arrays: ["https://lh3.googleusercontent.com/...", width, height]
-    var urlPattern = /\["(https:\/\/lh3\.googleusercontent\.com\/[^"]+)",(\d+),(\d+)/g;
+    // Look for photo URL arrays: ["url", width, height, ...], timestamp
+    var urlPattern = /\["(https:\/\/lh3\.googleusercontent\.com\/[^"]+)",(\d+),(\d+)[^\]]*\][\s\S]*?\],(\d{13})/g;
     var match;
     while ((match = urlPattern.exec(block)) !== null) {
       var url = match[1];
       var w = parseInt(match[2]);
       var h = parseInt(match[3]);
+      var ts = parseInt(match[4]);
       // Filter out tiny icons/thumbnails (only keep real photos)
       if (w > 200 && h > 200) {
         photos.push({
           baseUrl: url,
           w: w,
           h: h,
-          ts: '' // timestamp not easily available from HTML
+          ts: ts || ''
         });
       }
     }

@@ -165,6 +165,7 @@ function useGooglePhotosAlbum() {
           thumbSrc: `${p.baseUrl}=w400`,
           width: p.w,
           height: p.h,
+          ts: p.ts || null,
           attribution: 'Google Photos album',
         }));
         setPhotos(mapped);
@@ -391,13 +392,16 @@ function App() {
   const { photos: placePhotos, loading: placeLoading, error: placeError } = useGooglePlacePhotos();
   const { photos: albumPhotos, loading: albumLoading, error: albumError } = useGooglePhotosAlbum();
 
-  // Combine both sources: Google Places photos + Google Photos album
-  // Deduplicate by removing album photos that look similar to place photos (by rough size match)
+  // Combine both sources, sort newest-first (photos without timestamps go last)
   const photos = useMemo(() => {
-    if (albumPhotos.length === 0) return placePhotos;
-    if (placePhotos.length === 0) return albumPhotos;
-    // Place photos first, then album photos
-    return [...placePhotos, ...albumPhotos];
+    const all = [...placePhotos, ...albumPhotos];
+    all.sort((a, b) => {
+      if (!a.ts && !b.ts) return 0;
+      if (!a.ts) return 1;
+      if (!b.ts) return -1;
+      return new Date(b.ts) - new Date(a.ts);
+    });
+    return all;
   }, [placePhotos, albumPhotos]);
 
   const loading = placeLoading || albumLoading;
